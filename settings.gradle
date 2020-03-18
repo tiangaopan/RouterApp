@@ -1,0 +1,2 @@
+rootProject.name='RouterApp'
+include ':app'
