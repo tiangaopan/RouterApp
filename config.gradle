@@ -1,0 +1,23 @@
+ext {  //extend
+    // false: 组件模式 代表各个模块可以自己运行
+    // true ：集成模式 只有一个主工程
+    isModule = true
+    android = [
+            compileSdkVersion: 28,
+            minSdkVersion    : 19,
+            targetSdkVersion : 28,
+            versionCode      : 1,
+            versionName      : "1.0"
+    ]
+
+    appId = ["app"  : "com.tgp.routerapp",
+             "module1": "com.tgp.module1",
+             "module2" : "com.tgp.module2" ]
+
+    supportLibrary = "28.0.0"
+    dependencies = [
+            "appcompat-v7"     : "com.android.support:appcompat-v7:${supportLibrary}",
+    ]
+}
+
+
