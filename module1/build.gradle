@@ -30,9 +30,12 @@ android {
                 if (!isModule) {
                     manifest.srcFile 'src/main/module/AndroidManifest.xml'
                     java.srcDirs 'src/main/module/java', 'src/main/java'
-
                 } else {
                     manifest.srcFile 'src/main/AndroidManifest.xml'
+                    java {
+                        //排除java/debug文件夹下的所有文件
+                        exclude '*module'
+                    }
                 }
             }
         }
