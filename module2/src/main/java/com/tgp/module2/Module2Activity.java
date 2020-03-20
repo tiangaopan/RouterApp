@@ -28,8 +28,8 @@ public class Module2Activity extends Activity {
         TgpRouter.getInstance().inject(this);
         Log.i("module2", "我是模块2:" + msg);
 
-        //当处于组件模式的时候 BuildConfig.isModule
-        if (true){
+        //当处于组件模式的时候
+        if (BuildConfig.isModule){
             TestService testService = (TestService) TgpRouter.getInstance().build("/main/service1")
                     .navigation();
             testService.test();
@@ -50,7 +50,7 @@ public class Module2Activity extends Activity {
     }
 
     public void mainJump(View view) {
-        if (true){
+        if (BuildConfig.isModule){
             TgpRouter.getInstance().build("/main/test").withString("a",
                     "从Module2").navigation(this);
         }else{

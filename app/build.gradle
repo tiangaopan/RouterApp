@@ -13,8 +13,7 @@ android {
         targetSdkVersion cfg.targetSdkVersion
         versionCode cfg.versionCode
         versionName cfg.versionName
-        //添加一条 boolean类型的变量
-        buildConfigField("boolean","isModule",String.valueOf(isModule))
+
         /** javaCompileOptions ---->配置Java编译的选项
          * 通过在 build.gradle 编译配置(javaCompileOptions)中配置注解处理配置
          * (annotationProcessorOptions)，这样在注解处理器中
