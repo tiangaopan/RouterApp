@@ -1,7 +1,8 @@
-package com.dn_alan.module2;
+package com.tgp.module2;
 
 import android.app.Application;
 
+import com.tgp.router_core.TgpRouter;
 
 
 public class Module2Application extends Application {
