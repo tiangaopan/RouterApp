@@ -29,28 +29,43 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.annotation.processing.SupportedOptions;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
-import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 
+import static javax.lang.model.element.Modifier.PUBLIC;
 
 /**
- * 注解处理器
- * @author 田高攀
- * @since 2020/3/19 2:03 PM
+ * 在这个类上添加了@AutoService注解，它的作用是用来生成
+ * META-INF/services/javax.annotation.processing.Processor文件的，
+ * 也就是我们在使用注解处理器的时候需要手动添加
+ * META-INF/services/javax.annotation.processing.Processor，
+ * 而有了@AutoService后它会自动帮我们生成。
+ * AutoService是Google开发的一个库，使用时需要在
+ * factory-compiler中添加依赖
  */
+@AutoService(Processor.class)   //注册注解处理器
 /**
- * 支持的注解
+ * 处理器接收的参数 替代 {@link AbstractProcessor#getSupportedOptions()} 函数
  */
-@AutoService(Processor.class)
-@SupportedAnnotationTypes(Consts.ANN_TYPE_ROUTE)
+@SupportedOptions(Consts.ARGUMENTS_NAME)
+/**
+ * 指定使用的Java版本 替代 {@link AbstractProcessor#getSupportedSourceVersion()} 函数
+ * 声明我们注解支持的JDK的版本
+ */
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
+/**
+ * 注册给哪些注解的  替代 {@link AbstractProcessor#getSupportedAnnotationTypes()} 函数
+ * 声明我们要处理哪一些注解 该方法返回字符串的集合表示该处理器用于处理哪些注解
+ */
+@SupportedAnnotationTypes({Consts.ANN_TYPE_ROUTE})
 public class RouteProcessor extends AbstractProcessor {
+
 
     /**
      * key:组名 value:类名
@@ -80,10 +95,10 @@ public class RouteProcessor extends AbstractProcessor {
 
     private Log log;
 
-
-
     /**
      * 初始化 从 {@link ProcessingEnvironment} 中获得一系列处理器工具
+     *
+     * @param processingEnvironment
      */
     @Override
     public synchronized void init(ProcessingEnvironment processingEnvironment) {
@@ -104,63 +119,183 @@ public class RouteProcessor extends AbstractProcessor {
             throw new RuntimeException("Not set Processor Parmaters.");
         }
     }
+
+    /**
+     * 相当于main函数，正式处理注解
+     *
+     * @param set 使用了支持处理注解  的节点集合
+     * @param roundEnvironment 表示当前或是之前的运行环境,可以通过该对象查找找到的注解。
+     * @return true 表示后续处理器不会再处理(已经处理)
+     */
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
-        //判断是否添加了注解
+//        MethodSpec main = MethodSpec.methodBuilder("main")
+//                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+//                .returns(void.class)
+//                .addParameter(String[].class, "args")
+//                .addStatement("$T.out.println($S)", System.class, "Hello, JavaPoet!")
+//                .build();
+//
+//        TypeSpec helloWorld = TypeSpec.classBuilder("HelloWorld")
+//                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+//                .addMethod(main)
+//                .build();
+//
+//        JavaFile javaFile = JavaFile.builder("com.example.helloworld", helloWorld)
+//                .build();
+//
+//        try {
+//            javaFile.writeTo(filerUtils);
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+
+
+//        public class className{      TypeElement
+//            private int aaa;         VariableElement
+//            private int nbb;         VariableElement
+//            private void method(){}  ExecutableElement
+//            public void method2(){}  ExecutableElement
+//        }
+        //使用了需要处理的注解
         if (!Utils.isEmpty(set)) {
-            //获取所有被Route标记的元素集合
-            Set<? extends Element> elementsAnnotatedWith = roundEnvironment.getElementsAnnotatedWith(Route.class);
-            //处理Route注解
-            if (!Utils.isEmpty(elementsAnnotatedWith)) {
-                log.i("route class size : " + elementsAnnotatedWith.size());
+            //获取所有被 Route 注解的元素集合
+            Set<? extends Element> routeElements = roundEnvironment.getElementsAnnotatedWith
+                    (Route.class);
+            //处理 Route 注解
+            if (!Utils.isEmpty(routeElements)) {
                 try {
-                    parseRoutes(elementsAnnotatedWith);
+                    log.i("Route Class: ===" + routeElements.size());
+                    parseRoutes(routeElements);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
             return true;
         }
-
-
-
         return false;
     }
 
-    private void parseRoutes(Set<? extends Element> elementsAnnotatedWith) throws IOException {
-        //通过节点工具，传入全类名，生成节点(activity)
-        TypeElement typeElement = elementUtils.getTypeElement(Consts.ACTIVITY);
-        //节点的描述信息
-        TypeMirror typeMirror1 = typeElement.asType();
-        for (Element element : elementsAnnotatedWith) {
+    private void parseRoutes(Set<? extends Element> routeElements) throws IOException {
+        //支持配置路由类的类型（获得当前节点的类型 activity这个类的 节点信息，全类名）
+        /**
+         * elementUtils 通过节点工具，生成节点（传入全类名）
+         */
+        TypeElement activity = elementUtils.getTypeElement(Consts.ACTIVITY);
+        //节点自描述 Mirror
+        TypeMirror type_Activity = activity.asType();
+        log.i("Route Class: ===" + type_Activity);
+        TypeElement iService = elementUtils.getTypeElement(Consts.ISERVICE);
+        TypeMirror type_IService = iService.asType();
+
+
+        /**
+         * groupMap(组名:路由信息)集合
+         */
+        //声明 Route 注解的节点 (需要处理的节点 Activity/IService)
+        for (Element element : routeElements) {
             //路由信息
             RouteMeta routeMeta;
-            //获取使用注解的类信息
-            TypeMirror typeMirror = element.asType();
-            //获取到route注解
+            // 使用Route注解的类信息 (如activity)
+            TypeMirror tm = element.asType();
+            log.i("Route Class: " + tm.toString());
             Route route = element.getAnnotation(Route.class);
-            //route只能配在activity中，判断是否匹配
-            if (typeUtils.isSubtype(typeMirror, typeMirror1)) {
+            //是否是 Activity 使用了Route注解
+            /**
+             * 判断Route注解使用在什么类上面
+             */
+            if (typeUtils.isSubtype(tm, type_Activity)) {
                 routeMeta = new RouteMeta(RouteMeta.Type.ACTIVITY, route, element);
+            } else if (typeUtils.isSubtype(tm, type_IService)) {
+                routeMeta = new RouteMeta(RouteMeta.Type.ISERVICE, route, element);
             } else {
-                throw new RuntimeException("不满足条件，当前只能配置在Activity上" + element);
+                throw new RuntimeException("[Just Support Activity/IService Route] :" + element);
             }
             //分组信息记录  groupMap <Group分组,RouteMeta路由信息> 集合
             //检查是否配置 group 如果没有配置，则从path截取出组名
             categories(routeMeta);
         }
-        //生成类需要实现的接口
+
+       //生成类需要实现的接口
         TypeElement iRouteGroup = elementUtils.getTypeElement(Consts.IROUTE_GROUP);
+        log.i("---------" + iRouteGroup.getSimpleName());
         TypeElement iRouteRoot = elementUtils.getTypeElement(Consts.IROUTE_ROOT);
 
         /**
-         * 生成Group类 作用:记录 <地址,RouteMeta路由信息(Class文件等信息)>
+         *  生成Group类 作用:记录 <地址,RouteMeta路由信息(Class文件等信息)>
          */
         generatedGroup(iRouteGroup);
         /**
          * 生成Root类 作用:记录 <分组，对应的Group类>
          */
         generatedRoot(iRouteRoot, iRouteGroup);
+
+
+    }
+
+    private void generatedGroup(TypeElement iRouteGroup) throws IOException {
+        //创建参数类型 Map<Object, Object>----->Map<String,RouteMeta>
+        ParameterizedTypeName atlas = ParameterizedTypeName.get(
+                ClassName.get(Map.class),
+                ClassName.get(String.class),
+                ClassName.get(RouteMeta.class)
+        );
+        //创建参数  Map<String,RouteMeta> atlas
+        ParameterSpec groupParamSpec = ParameterSpec.builder(atlas, "atlas")
+                .build();
+
+        //遍历分组,每一个分组创建一个 $$Group$$ 类
+        for (Map.Entry<String, List<RouteMeta>> entry : groupMap.entrySet()) {
+            /**
+             * 类成员函数loadInfo声明构建
+             */
+            //函数 public void loadInfo(Map<String,RouteMeta> atlas)
+            MethodSpec.Builder loadIntoMethodOfGroupBuilder = MethodSpec.methodBuilder
+                    (Consts.METHOD_LOAD_INTO)
+                    .addAnnotation(Override.class)
+                    .addModifiers(PUBLIC)
+                    .returns(TypeName.VOID)  //可以不写
+                    .addParameter(groupParamSpec);
+
+            //分组名 与 对应分组中的信息
+            String groupName = entry.getKey();
+            List<RouteMeta> groupData = entry.getValue();
+            //遍历分组中的条目 数据
+            for (RouteMeta routeMeta : groupData) {
+                // 组装函数体:
+                // atlas.put(地址,RouteMeta.build(Class,path,group))
+                /**
+                 * $S $T  $L两个占位符
+                 * $S ---->String
+                 * $T------>Class类
+                 * $L------>字面量
+                 */
+                // $S https://github.com/square/javapoet#s-for-strings
+                // $T https://github.com/square/javapoet#t-for-types
+                loadIntoMethodOfGroupBuilder.addStatement(
+                        "atlas.put($S, $T.build($T.$L,$T.class, $S, $S))",
+                        routeMeta.getPath(),
+                        ClassName.get(RouteMeta.class),
+                        ClassName.get(RouteMeta.Type.class),
+                        routeMeta.getType(),
+                        ClassName.get((TypeElement) routeMeta.getElement()),
+                        routeMeta.getPath().toLowerCase(),
+                        routeMeta.getGroup().toLowerCase());
+            }
+            // 创建java文件($$Group$$)  组
+            String groupClassName = Consts.NAME_OF_GROUP + groupName;
+            JavaFile.builder(Consts.PACKAGE_OF_GENERATE_FILE,
+                    TypeSpec.classBuilder(groupClassName)
+                            .addSuperinterface(ClassName.get(iRouteGroup))
+                            .addModifiers(PUBLIC)
+                            .addMethod(loadIntoMethodOfGroupBuilder.build())
+                            .build()
+            ).build().writeTo(filerUtils);
+            log.i("Generated RouteGroup: " + Consts.PACKAGE_OF_GENERATE_FILE + "." +
+                    groupClassName);
+            //分组名和生成的对应的Group类类名
+            rootMap.put(groupName, groupClassName);
+        }
     }
 
     private void generatedRoot(TypeElement iRouteRoot, TypeElement iRouteGroup) throws IOException {
@@ -182,7 +317,7 @@ public class RouteProcessor extends AbstractProcessor {
         MethodSpec.Builder loadIntoMethodOfRootBuilder = MethodSpec.methodBuilder
                 (Consts.METHOD_LOAD_INTO)
                 .addAnnotation(Override.class)
-                .addModifiers(Modifier.PUBLIC)
+                .addModifiers(PUBLIC)
                 .addParameter(rootParamSpec);
 
         //函数体
@@ -196,7 +331,7 @@ public class RouteProcessor extends AbstractProcessor {
         JavaFile.builder(Consts.PACKAGE_OF_GENERATE_FILE,
                 TypeSpec.classBuilder(rootClassName)
                         .addSuperinterface(ClassName.get(iRouteRoot))
-                        .addModifiers(Modifier.PUBLIC)
+                        .addModifiers(PUBLIC)
                         .addMethod(loadIntoMethodOfRootBuilder.build())
                         .build()
         ).build().writeTo(filerUtils);
@@ -204,91 +339,63 @@ public class RouteProcessor extends AbstractProcessor {
         log.i("Generated RouteRoot: " + Consts.PACKAGE_OF_GENERATE_FILE + "." + rootClassName);
     }
 
-    private void generatedGroup(TypeElement iRouteGroup) throws IOException {
-        ParameterizedTypeName typeName = ParameterizedTypeName.get(ClassName.get(Map.class),
-                ClassName.get(String.class), ClassName.get(RouteMeta.class));
-
-        //创建参数名字 Map<string ,RouteMeta > typeNameMap
-        ParameterSpec spec = ParameterSpec.builder(typeName, "typeNameMap").build();
-        //遍历分组，每一个分组创建一个  ..$$Group$$.. 类
-        for (Map.Entry<String, List<RouteMeta>> stringListEntry : groupMap.entrySet()) {
-            //创建方法
-            MethodSpec.Builder builder = MethodSpec.methodBuilder(Consts.METHOD_LOAD_INTO)
-                    .addAnnotation(Override.class)
-                    .addModifiers(Modifier.PUBLIC)
-                    .returns(TypeName.VOID)
-                    .addParameter(spec);
-            String groupName = stringListEntry.getKey();
-            List<RouteMeta> groupData = stringListEntry.getValue();
-            for (RouteMeta routeMeta : groupData) {
-                // 组装函数体:
-                // atlas.put(地址,RouteMeta.build(Class,path,group))
-                /**
-                 * $S $T  $L两个占位符
-                 * $S ---->String
-                 * $T------>Class类
-                 * $L------>字面量
-                 */
-                // $S https://github.com/square/javapoet#s-for-strings
-                // $T https://github.com/square/javapoet#t-for-types
-                builder.addStatement(
-                        "typeNameMap.put($S, $T.build($T.$L,$T.class, $S, $S))",
-                        routeMeta.getPath(),
-                        ClassName.get(RouteMeta.class),
-                        ClassName.get(RouteMeta.Type.class),
-                        routeMeta.getType(),
-                        ClassName.get((TypeElement) routeMeta.getElement()),
-                        routeMeta.getPath().toLowerCase(),
-                        routeMeta.getGroup().toLowerCase());
-            }
-            // 创建java文件($$Group$$)  组
-            String groupClassName = Consts.NAME_OF_GROUP + groupName;
-            JavaFile.builder(Consts.PACKAGE_OF_GENERATE_FILE,
-                    TypeSpec.classBuilder(groupClassName)
-                            .addSuperinterface(ClassName.get(iRouteGroup))
-                            .addModifiers(Modifier.PUBLIC)
-                            .addMethod(builder.build())
-                            .build()
-            ).build().writeTo(filerUtils);
-            log.i("Generated RouteGroup: " + Consts.PACKAGE_OF_GENERATE_FILE + "." +
-                    groupClassName);
-            //分组名和生成的对应的Group类类名
-            rootMap.put(groupName, groupClassName);
-
-        }
-    }
-
     private void categories(RouteMeta routeMeta) {
         if (routeVerify(routeMeta)) {
+            log.i("Group Info, Group Name = " + routeMeta.getGroup() + ", Path = " +
+                    routeMeta.getPath());
+
+            /**
+             * groupMap 分组，和组中的路由信息
+             *
+             * 举例：
+             *@Route(path = "/main/test")  //标致
+             * public class SecondActivity extends Activity {
+             *
+             *     @Route(path = "/main/test")  //标致
+             *     class A{
+             *
+             *     }
+             *     @Route(path = "/main/test")  //标致
+             *     class B{
+             *
+             *     }
+             */
             List<RouteMeta> routeMetas = groupMap.get(routeMeta.getGroup());
-            //如果之前未分组，就进行创建，已经分组过的，直接添加到组里就可以了
+            //如果未记录分组则创建
             if (Utils.isEmpty(routeMetas)) {
-                List<RouteMeta> routeMetaList = new ArrayList<>();
-                routeMetaList.add(routeMeta);
-                groupMap.put(routeMeta.getGroup(), routeMetaList);
+                List<RouteMeta> routeMetaSet = new ArrayList<>();
+                routeMetaSet.add(routeMeta);
+                groupMap.put(routeMeta.getGroup(), routeMetaSet);
             } else {
                 routeMetas.add(routeMeta);
             }
         } else {
-            log.i("group info error : " + routeMeta.getPath());
+            log.i("Group Info Error: " + routeMeta.getPath());
         }
     }
 
-    private boolean routeVerify(RouteMeta routeMeta) {
-        String path = routeMeta.getPath();
-        String group = routeMeta.getGroup();
+    /**
+     * 验证路由信息必须存在path(并且设置分组)
+     *验证地址合法性
+     * @param meta raw meta
+     */
+    private boolean routeVerify(RouteMeta meta) {
+        String path = meta.getPath();
+        String group = meta.getGroup();
+        //路由地址必须以 / 开头
         if (Utils.isEmpty(path) || !path.startsWith("/")) {
             return false;
         }
+        //如果没有设置分组,以第一个 / 后的节点为分组(所以必须path两个/)
         if (Utils.isEmpty(group)) {
-            //   "/main/test" => group = main
-            String substring = path.substring(1, path.indexOf("/"));
-            if (Utils.isEmpty(substring)) {
+            String defaultGroup = path.substring(1, path.indexOf("/", 1));
+            if (Utils.isEmpty(defaultGroup)) {
                 return false;
             }
-            routeMeta.setGroup(substring);
+            meta.setGroup(defaultGroup);
             return true;
         }
         return true;
     }
+
 }
